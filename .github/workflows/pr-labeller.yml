@@ -1,0 +1,23 @@
+name: PR Labeller
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+
+jobs:
+  labeller:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/labeler@f27b608878404679385c85cfa523b85ccb86e213
+        with:
+          configuration-path: .github/labeller.yml
+          sync-labels: true

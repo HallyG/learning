@@ -1,0 +1,69 @@
+name: "Detect changed directories"
+description: "Detects changed subdirectories in a PR"
+
+inputs:
+  directory:
+    description: "Directory to detect changes in"
+    required: true
+  base-sha:
+    description: "Base commit SHA to diff against"
+    required: true
+  head-sha:
+    description: "Head commit SHA to diff against"
+    required: true
+  invalidation-path:
+    description: "If any file under this path changes, return all subdirectories"
+    required: false
+    default: ""
+  exclude:
+    description: "Space-separated list of subdirectory names to exclude from detection"
+    required: false
+    default: ""
+
+outputs:
+  names:
+    description: "JSON array of changed subdirectory names"
+    value: ${{ steps.detect.outputs.names }}
+  has-changes:
+    description: "Whether any subdirectories changed"
+    value: ${{ steps.detect.outputs.has-changes }}
+
+runs:
+  using: composite
+  steps:
+    - id: detect
+      shell: bash
+      run: |
+        set +e
+
+        CHANGED_FILES=$(git diff --name-only ${{ inputs.base-sha }} ${{ inputs.head-sha }} -- ${{ inputs.directory }}/ || true)
+
+        DEPTH=$(echo "${{ inputs.directory }}" | awk -F/ '{print NF + 1}')
+
+        NAMES=$(echo "$CHANGED_FILES" | awk -F/ -v dir="${{ inputs.directory }}" -v d="$DEPTH" '
+          $0 ~ "^"dir"/" {print $d}
+        ' | sort -u || true)
+
+        FILTERED=""
+        for name in $NAMES; do
+          if [ -d "${{ inputs.directory }}/$name" ]; then
+            SKIP=false
+            for excl in ${{ inputs.exclude }}; do
+              if [ "$name" = "$excl" ]; then SKIP=true; break; fi
+            done
+            if [ "$SKIP" = "false" ]; then
+              FILTERED="${FILTERED}${name}"$'\n'
+            fi
+          fi
+        done
+
+        FILTERED=$(echo "$FILTERED" | sed '/^$/d' || true)
+
+        if [ -z "$FILTERED" ]; then
+          echo "names=[]" >> $GITHUB_OUTPUT
+          echo "has-changes=false" >> $GITHUB_OUTPUT
+        else
+          NAMES_JSON=$(echo "$FILTERED" | jq -R . | jq -s -c .)
+          echo "names=$NAMES_JSON" >> $GITHUB_OUTPUT
+          echo "has-changes=true" >> $GITHUB_OUTPUT
+        fi

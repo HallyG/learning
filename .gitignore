@@ -1,0 +1,17 @@
+# GO
+build/
+dist/
+
+# Services
+services/*/data/
+
+# Sqlite
+*.db
+*.db-shm
+*.db-wal
+
+# NPM
+node_modules
+
+#
+.env

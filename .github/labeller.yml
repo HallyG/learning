@@ -1,0 +1,30 @@
+"CI/CD":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "**/.golangci.yaml"
+          - ".goreleaser.yaml"
+          - "Makefile"
+
+"Go":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.go"
+
+"Dependencies":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/go.mod"
+          - "**/go.sum"
+
+"Unit Test":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*_test.go"
+
+"Documentation":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/README.md"
+          - "**/README.*.md"
+          - "**/CLAUDE.md"

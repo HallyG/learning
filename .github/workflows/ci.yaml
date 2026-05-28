@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  workflow_call:
+    inputs:
+      folder_path:
+        required: true
+        type: string
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      folder-name: ${{ steps.sanitize.outputs.folder_name }}
+    steps:
+      - name: Sanitize folder name
+        id: sanitize
+        run: |
+          FOLDER_NAME=$(basename "${{ inputs.folder_path }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+          echo "folder_name=$FOLDER_NAME" >> "$GITHUB_OUTPUT"
+  lint:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee
+        with:
+          version: v2.4.0
+          working-directory: .
+          args: >
+            --config .golangci.yaml
+            --verbose
+            --timeout=3m
+            ./${{ needs.prepare.outputs.folder-name }}/...
+  tests:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: "go.mod"
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Run tests
+        working-directory: .
+        run: go test -tags="fts5" ./${{ needs.prepare.outputs.folder-name }}/... -timeout 10s -race -coverprofile=coverage.txt -covermode=atomic
+      - name: Upload test coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: coverage-${{ needs.prepare.outputs.folder-name }}-${{ github.run_number }}
+          path: coverage.txt
+          retention-days: 1

@@ -1,0 +1,39 @@
+name: PR
+
+on:
+  pull_request:
+    branches: [master]
+    types:
+      - opened
+      - synchronize
+
+jobs:
+  detect-changed-folders:
+    runs-on: ubuntu-24.04
+    outputs:
+      folder_names: ${{ steps.detect.outputs.names }}
+      has-changes: ${{ steps.detect.outputs.has-changes }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/detect-changed-dirs
+        id: detect
+        with:
+          directory: .
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.sha }}
+          exclude: docs
+
+  ci:
+    needs: detect-changed-folders
+    if: ${{ needs.detect-changed-folders.outputs.has-changes == 'true' }}
+    strategy:
+      matrix:
+        folder: ${{ fromJson(needs.detect-changed-folders.outputs.folder_names || '[]') }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.folder }}
+      cancel-in-progress: true
+    uses: ./.github/workflows/ci.yaml
+    with:
+      folder_path: ./${{ matrix.folder }}
