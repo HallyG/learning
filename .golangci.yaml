@@ -1,0 +1,52 @@
+version: "2"
+run:
+  go: "1.25.1"
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+  timeout: 3m
+linters:
+  default: standard
+  enable:
+    - gosec
+    - bodyclose
+    - noctx
+    - exhaustive
+    - loggercheck
+    - nilerr
+    - paralleltest
+    - sloglint
+    - testifylint
+    - thelper
+    - tparallel
+    - sqlclosecheck
+    - rowserrcheck
+    - tagliatelle
+    - musttag
+    - errname
+    - decorder
+    - goconst
+    - gocritic
+    - godot
+    - mirror
+    - makezero
+    - nakedret
+    - usestdlibvars
+
+  settings:
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+    staticcheck:
+      checks:
+        - all
+        - -ST1001 # Disable dot import check
+        - -ST1000
+formatters:
+  enable:
+    - gofmt
+    - goimports
+issues:
+  uniq-by-line: false
+output:
+  show-stats: true
