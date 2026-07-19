@@ -29,6 +29,10 @@ type (
 	}
 )
 
+func NewFromFile(path string) (*simpleWAL, error) {
+	return nil, nil
+}
+
 func Open(path string) (*simpleWAL, error) {
 	f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_RDWR, 0600) //nolint:gosec
 	if err != nil {
@@ -89,24 +93,13 @@ func (w *simpleWAL) Log(data []byte) error {
 
 func (w *simpleWAL) Replay(fn func(*Entry) error) error {
 	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("seeking to file start: %w", err)
+		return fmt.Errorf(
+			"seeking wal: %w",
+			err,
+		)
 	}
 
-	r := bufio.NewReader(w.file)
-	for {
-		var ent Entry
-		if err := ent.Decode(r); err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-
-			return fmt.Errorf("reading wal entry: %w", err)
-		}
-
-		if err := fn(&ent); err != nil {
-			return fmt.Errorf("processing latest wal entry: %w", err)
-		}
-	}
+	return ReplayReader(w.file, fn)
 }
 
 func (w *simpleWAL) Close() error {
@@ -122,4 +115,23 @@ func (w *simpleWAL) Close() error {
 	}
 
 	return nil
+}
+
+func ReplayReader(r io.Reader, fn func(*Entry) error) error {
+	br := bufio.NewReader(r)
+
+	for {
+		var ent Entry
+		if err := ent.Decode(br); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+
+			return fmt.Errorf("reading wal entry: %w", err)
+		}
+
+		if err := fn(&ent); err != nil {
+			return fmt.Errorf("processing latest wal entry: %w", err)
+		}
+	}
 }
