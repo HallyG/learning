@@ -1,4 +1,4 @@
-package main
+package wal
 
 import (
 	"encoding/binary"
@@ -8,14 +8,14 @@ import (
 	"math"
 )
 
-type entry struct {
+type Entry struct {
 	Version        byte
 	SequenceNumber uint64
 	Data           []byte
 	Checksum       uint32
 }
 
-func (e *entry) encode(w io.Writer) error {
+func (e *Entry) encode(w io.Writer) error {
 	buf := make([]byte, 9+len(e.Data)) // 1 version + 8 seqnum + data
 
 	buf[0] = e.Version
@@ -50,7 +50,7 @@ func (e *entry) encode(w io.Writer) error {
 	return nil
 }
 
-func (e *entry) decode(r io.Reader) error {
+func (e *Entry) decode(r io.Reader) error {
 	var version byte
 	if err := binary.Read(r, binary.BigEndian, &version); err != nil {
 		return fmt.Errorf("version: %w", err)
@@ -82,6 +82,7 @@ func (e *entry) decode(r io.Reader) error {
 	buf := make([]byte, 9+dataLen) // 1 version + 8 seqnum + data
 	buf[0] = version
 	binary.BigEndian.PutUint64(buf[1:], seqNum)
+
 	copy(buf[9:], data)
 	expectedChecksum := crc32.ChecksumIEEE(buf)
 	if expectedChecksum != checksum {

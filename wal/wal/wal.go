@@ -1,4 +1,4 @@
-package main
+package wal
 
 import (
 	"bufio"
@@ -15,7 +15,7 @@ var _ WAL = &simpleWAL{}
 type (
 	WAL interface {
 		Log(data []byte) error
-		Replay(fn func(*entry) error) error
+		Replay(fn func(*Entry) error) error
 		Close() error
 	}
 
@@ -40,7 +40,7 @@ func Open(path string) (*simpleWAL, error) {
 		writer: bufio.NewWriter(f),
 	}
 
-	if err := w.Replay(func(e *entry) error {
+	if err := w.Replay(func(e *Entry) error {
 		w.nextSeqNum = e.SequenceNumber + 1
 		return nil
 	}); err != nil {
@@ -64,7 +64,7 @@ func (w *simpleWAL) Log(data []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	entry := &entry{
+	entry := &Entry{
 		Version:        1,
 		SequenceNumber: w.nextSeqNum,
 		Data:           data,
@@ -87,14 +87,14 @@ func (w *simpleWAL) Log(data []byte) error {
 	return nil
 }
 
-func (w *simpleWAL) Replay(fn func(*entry) error) error {
+func (w *simpleWAL) Replay(fn func(*Entry) error) error {
 	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("seeking to file start: %w", err)
 	}
 
 	r := bufio.NewReader(w.file)
 	for {
-		var ent entry
+		var ent Entry
 		if err := ent.decode(r); err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
