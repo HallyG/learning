@@ -1,5 +1,5 @@
 name: "Detect changed directories"
-description: "Detects changed subdirectories in a PR"
+description: "Detects which subdirectories of a given path have changed in a PR"
 
 inputs:
   directory:
@@ -36,17 +36,23 @@ runs:
       run: |
         set +e
 
-        CHANGED_FILES=$(git diff --name-only ${{ inputs.base-sha }} ${{ inputs.head-sha }} -- ${{ inputs.directory }}/ || true)
+        DIR="${{ inputs.directory }}"
+        DIR="${DIR%/}"
 
-        DEPTH=$(echo "${{ inputs.directory }}" | awk -F/ '{print NF + 1}')
-
-        NAMES=$(echo "$CHANGED_FILES" | awk -F/ -v dir="${{ inputs.directory }}" -v d="$DEPTH" '
-          $0 ~ "^"dir"/" {print $d}
-        ' | sort -u || true)
+        if [ "$DIR" = "." ] || [ -z "$DIR" ]; then
+          CHANGED_FILES=$(git diff --name-only ${{ inputs.base-sha }} ${{ inputs.head-sha }} || true)
+          NAMES=$(echo "$CHANGED_FILES" | awk -F/ 'NF > 1 {print $1}' | sort -u || true)
+        else
+          CHANGED_FILES=$(git diff --name-only ${{ inputs.base-sha }} ${{ inputs.head-sha }} -- "$DIR/" || true)
+          DEPTH=$(echo "$DIR" | awk -F/ '{print NF + 1}')
+          NAMES=$(echo "$CHANGED_FILES" | awk -F/ -v dir="$DIR" -v d="$DEPTH" '
+            index($0, dir "/") == 1 {print $d}
+          ' | sort -u || true)
+        fi
 
         FILTERED=""
         for name in $NAMES; do
-          if [ -d "${{ inputs.directory }}/$name" ]; then
+          if [ -d "$DIR/$name" ]; then
             SKIP=false
             for excl in ${{ inputs.exclude }}; do
               if [ "$name" = "$excl" ]; then SKIP=true; break; fi

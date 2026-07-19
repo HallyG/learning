@@ -23,7 +23,7 @@ jobs:
           directory: .
           base-sha: ${{ github.event.pull_request.base.sha }}
           head-sha: ${{ github.sha }}
-          exclude: docs
+          exclude: .github
 
   ci:
     needs: detect-changed-folders
