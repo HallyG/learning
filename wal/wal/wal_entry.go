@@ -2,11 +2,14 @@ package wal
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
 	"math"
 )
+
+var ErrChecksumMismatch = errors.New("checksum mismatch")
 
 type Entry struct {
 	Version        byte
@@ -15,7 +18,7 @@ type Entry struct {
 	Checksum       uint32
 }
 
-func (e *Entry) encode(w io.Writer) error {
+func (e *Entry) Encode(w io.Writer) error {
 	buf := make([]byte, 9+len(e.Data)) // 1 version + 8 seqnum + data
 
 	buf[0] = e.Version
@@ -50,7 +53,7 @@ func (e *Entry) encode(w io.Writer) error {
 	return nil
 }
 
-func (e *Entry) decode(r io.Reader) error {
+func (e *Entry) Decode(r io.Reader) error {
 	var version byte
 	if err := binary.Read(r, binary.BigEndian, &version); err != nil {
 		return fmt.Errorf("version: %w", err)
@@ -86,7 +89,7 @@ func (e *Entry) decode(r io.Reader) error {
 	copy(buf[9:], data)
 	expectedChecksum := crc32.ChecksumIEEE(buf)
 	if expectedChecksum != checksum {
-		return fmt.Errorf("checksum mismatch at seq %d", seqNum)
+		return fmt.Errorf("%w at sequence %d", ErrChecksumMismatch, seqNum)
 	}
 
 	e.Version = version

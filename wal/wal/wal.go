@@ -70,7 +70,7 @@ func (w *simpleWAL) Log(data []byte) error {
 		Data:           data,
 	}
 
-	if err := entry.encode(w.writer); err != nil {
+	if err := entry.Encode(w.writer); err != nil {
 		return fmt.Errorf("encoding wal entry: %w", err)
 	}
 
@@ -95,7 +95,7 @@ func (w *simpleWAL) Replay(fn func(*Entry) error) error {
 	r := bufio.NewReader(w.file)
 	for {
 		var ent Entry
-		if err := ent.decode(r); err != nil {
+		if err := ent.Decode(r); err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
