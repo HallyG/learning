@@ -61,6 +61,14 @@ func TestEncodeDecodeEntry(t *testing.T) {
 			},
 			expectedError: io.ErrUnexpectedEOF,
 		},
+		"returns error for invalid version": {
+			input: &wal.Entry{
+				Version:        2,
+				SequenceNumber: 42,
+				Data:           []byte("hello world"),
+			},
+			expectedError: wal.ErrCorruptRecord,
+		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {

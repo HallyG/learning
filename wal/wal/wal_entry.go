@@ -9,7 +9,16 @@ import (
 	"math"
 )
 
-var ErrChecksumMismatch = errors.New("checksum mismatch")
+const (
+	Version1   = 1
+	MaxSize    = math.MaxUint32
+	headerSize = 1 + 8 + 4
+)
+
+var (
+	ErrChecksumMismatch = errors.New("checksum mismatch")
+	ErrCorruptRecord    = errors.New("corrupt wal record")
+)
 
 type Entry struct {
 	Version        byte
@@ -19,36 +28,33 @@ type Entry struct {
 }
 
 func (e *Entry) Encode(w io.Writer) error {
-	if len(e.Data) > math.MaxUint32 {
-		return fmt.Errorf("data too large: %d bytes", len(e.Data))
+	if len(e.Data) > MaxSize {
+		return fmt.Errorf("invalid length %d", len(e.Data))
 	}
 
-	// Build payload for checksum
-	buf := make([]byte, 13+len(e.Data)) // 1 version + 8 seqnum + 4 length + data
-	buf[0] = e.Version
-	binary.BigEndian.PutUint64(buf[1:], e.SequenceNumber)
-	binary.BigEndian.PutUint32(buf[9:], uint32(len(e.Data)))
-	copy(buf[13:], e.Data)
-	checksum := crc32.ChecksumIEEE(buf)
+	if e.Version == 0 {
+		e.Version = Version1
+	}
 
 	if err := binary.Write(w, binary.BigEndian, e.Version); err != nil {
-		return fmt.Errorf("version: %w", err)
+		return fmt.Errorf("writing version: %w", err)
 	}
 
 	if err := binary.Write(w, binary.BigEndian, e.SequenceNumber); err != nil {
-		return fmt.Errorf("sequence number: %w", err)
+		return fmt.Errorf("writing sequence number: %w", err)
 	}
 
 	if err := binary.Write(w, binary.BigEndian, uint32(len(e.Data))); err != nil { //nolint:gosec
-		return fmt.Errorf("data length: %w", err)
+		return fmt.Errorf("writing data length: %w", err)
 	}
 
 	if _, err := w.Write(e.Data); err != nil {
-		return fmt.Errorf("data: %w", err)
+		return fmt.Errorf("writing data: %w", err)
 	}
 
+	checksum := calculateChecksum(e.Version, e.SequenceNumber, uint32(len(e.Data)), e.Data)
 	if err := binary.Write(w, binary.BigEndian, checksum); err != nil {
-		return fmt.Errorf("checksum: %w", err)
+		return fmt.Errorf("writing checksum: %w", err)
 	}
 
 	e.Checksum = checksum
@@ -59,40 +65,37 @@ func (e *Entry) Encode(w io.Writer) error {
 func (e *Entry) Decode(r io.Reader) error {
 	var version byte
 	if err := binary.Read(r, binary.BigEndian, &version); err != nil {
-		return fmt.Errorf("version: %w", err)
+		return fmt.Errorf("reading version: %w", err)
 	}
 	if version != 1 {
-		return fmt.Errorf("unknown version %d", version)
+		return fmt.Errorf("%w: unknown version %d", ErrCorruptRecord, version)
 	}
 
 	var seqNum uint64
 	if err := binary.Read(r, binary.BigEndian, &seqNum); err != nil {
-		return fmt.Errorf("sequence number: %w", err)
+		return fmt.Errorf("reading sequence number: %w", err)
 	}
 
 	var dataLen uint32
 	if err := binary.Read(r, binary.BigEndian, &dataLen); err != nil {
-		return fmt.Errorf("data length: %w", err)
+		return fmt.Errorf("reading data length: %w", err)
+	}
+
+	if dataLen > MaxSize {
+		return fmt.Errorf("%w: invalid length %d", ErrCorruptRecord, len(e.Data))
 	}
 
 	data := make([]byte, dataLen)
 	if _, err := io.ReadFull(r, data); err != nil {
-		return fmt.Errorf("data: %w", err)
+		return fmt.Errorf("reading data: %w", err)
 	}
 
 	var checksum uint32
 	if err := binary.Read(r, binary.BigEndian, &checksum); err != nil {
-		return fmt.Errorf("checksum: %w", err)
+		return fmt.Errorf("reading checksum: %w", err)
 	}
 
-	// Build payload for checksum
-	buf := make([]byte, 13+dataLen) // 1 version + 8 seqnum + 4 length + data
-	buf[0] = version
-	binary.BigEndian.PutUint64(buf[1:], seqNum)
-	binary.BigEndian.PutUint32(buf[9:], dataLen)
-	copy(buf[13:], data)
-
-	expectedChecksum := crc32.ChecksumIEEE(buf)
+	expectedChecksum := calculateChecksum(version, seqNum, dataLen, data)
 	if expectedChecksum != checksum {
 		return fmt.Errorf("%w at sequence %d", ErrChecksumMismatch, seqNum)
 	}
@@ -103,4 +106,15 @@ func (e *Entry) Decode(r io.Reader) error {
 	e.Checksum = checksum
 
 	return nil
+}
+
+func calculateChecksum(version byte, seq uint64, dataLen uint32, data []byte) uint32 {
+	buf := make([]byte, headerSize+len(data))
+
+	buf[0] = version
+	binary.BigEndian.PutUint64(buf[1:], seq)
+	binary.BigEndian.PutUint32(buf[9:], uint32(len(data)))
+	copy(buf[13:], data)
+
+	return crc32.ChecksumIEEE(buf)
 }
