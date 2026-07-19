@@ -50,21 +50,17 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	scheduler := sfq.NewSFQScheduler(queue, queue2)
 	scheduler.Perturb()
 
-	req1 := &sfq.Request{
-		ID: "abc",
+	requests := 10
+	for i := range requests {
+		req := &sfq.Request{
+			ID: fmt.Sprintf("%04d", i),
+		}
+		scheduler.Enqueue(req)
 	}
-	scheduler.Enqueue(req1)
 
-	req2 := &sfq.Request{
-		ID: "def",
+	for range requests {
+		fmt.Println(scheduler.Dequeue())
 	}
-	scheduler.Enqueue(req2)
-
-	fmt.Println(scheduler.Dequeue())
-	fmt.Println(scheduler.Dequeue())
-	fmt.Println(scheduler.Dequeue())
-	fmt.Println(scheduler.Dequeue())
-	fmt.Println(scheduler.Dequeue())
 
 	return nil
 }

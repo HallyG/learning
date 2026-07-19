@@ -5,7 +5,7 @@ type Keyer interface {
 }
 
 type Scheduler[T Keyer] interface {
-	Enqueue(item T)
+	Enqueue(item T) error
 	Dequeue() (T, bool)
 	Perturb()
 }

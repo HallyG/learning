@@ -3,6 +3,7 @@ package sfq
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"sync"
 )
 
@@ -29,7 +30,7 @@ func NewSFQScheduler[T Keyer](queue ...Queue[T]) Scheduler[T] {
 	}
 }
 
-func (s *sfqScheduler[T]) Enqueue(item T) {
+func (s *sfqScheduler[T]) Enqueue(item T) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -37,18 +38,17 @@ func (s *sfqScheduler[T]) Enqueue(item T) {
 	hashNum := int(binary.BigEndian.Uint32(hash[:]))
 
 	queueIdx := hashNum % len(s.queues)
-
 	s.queues[queueIdx].Push(item)
+
+	fmt.Println(item.Key(), queueIdx)
+
+	return nil
 }
 
 func (s *sfqScheduler[T]) Dequeue() (T, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.roundRobin()
-}
-
-func (s *sfqScheduler[T]) roundRobin() (T, bool) {
 	n := len(s.queues)
 	var zero T
 	if n == 0 {
