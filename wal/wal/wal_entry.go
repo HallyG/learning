@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"math"
 )
 
 const (
 	Version1   = 1
-	MaxSize    = math.MaxUint32
+	MaxSize    = 100 << 20
 	headerSize = 1 + 8 + 4
 )
 
