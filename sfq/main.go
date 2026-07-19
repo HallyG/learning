@@ -44,11 +44,10 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 		return fmt.Errorf("parsing flags: %w", err)
 	}
 
-	queue := sfq.NewSliceQueue[*sfq.Request](5)
-	queue2 := sfq.NewSliceQueue[*sfq.Request](5)
-
-	scheduler := sfq.NewSFQScheduler(queue, queue2)
-	scheduler.Perturb()
+	scheduler := sfq.NewSFQScheduler(
+		sfq.NewSliceQueue[*sfq.Request](5),
+		sfq.NewSliceQueue[*sfq.Request](5),
+	)
 
 	requests := 4
 	iterations := 2
@@ -60,7 +59,8 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 			req := &sfq.Request{
 				ID: fmt.Sprintf("%04d", i),
 			}
-			scheduler.Enqueue(req)
+
+			_ = scheduler.Enqueue(req)
 		}
 
 		for range requests {

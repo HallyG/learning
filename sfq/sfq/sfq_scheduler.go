@@ -18,33 +18,74 @@ func (r *Request) Key() string {
 }
 
 type sfqScheduler[T Keyer] struct {
-	queues      []Queue[T]
-	cursor      int
-	pertubation int
+	queues []Queue[T]
+
+	cursor       int
+	perturbation uint64
+	subsets      int
 
 	mu sync.RWMutex
 }
 
 func NewSFQScheduler[T Keyer](queue ...Queue[T]) Scheduler[T] {
-	return &sfqScheduler[T]{
-		queues: queue,
+	s := &sfqScheduler[T]{
+		queues:  queue,
+		subsets: 1,
 	}
+
+	if s.subsets > len(queue) {
+		s.subsets = len(queue)
+	}
+
+	return s
 }
 
 func (s *sfqScheduler[T]) Enqueue(item T) error {
 	s.mu.RLock()
-	pertubation := s.pertubation
+	perturbation := s.perturbation
 	s.mu.RUnlock()
 
-	hash := sha256.Sum256(append([]byte(item.Key()), byte(pertubation)))
-	hashNum := int(binary.BigEndian.Uint32(hash[:]))
-
-	queueIdx := hashNum % len(s.queues)
-	s.queues[queueIdx].Push(item)
-
-	fmt.Println(item.Key(), queueIdx)
+	queueIdx := s.bestQueue(item.Key(), perturbation)
+	if err := s.queues[queueIdx].Push(item); err != nil {
+		return fmt.Errorf("enqueueing item: %w", err)
+	}
 
 	return nil
+}
+
+func (s *sfqScheduler[T]) bestQueue(key string, perturbation uint64) int {
+	result := make([]int, 0, s.subsets)
+	seen := make(map[int]struct{})
+
+	var pBuf [8]byte
+	binary.BigEndian.PutUint64(pBuf[:], perturbation)
+
+	for i := 0; len(result) < int(s.subsets); i++ {
+		buf := make([]byte, 0, len(key)+16)
+		buf = append(buf, key...)
+		buf = append(buf, pBuf[:]...)
+		buf = binary.BigEndian.AppendUint64(buf, uint64(i))
+
+		sum := sha256.Sum256(buf)
+		hash := binary.BigEndian.Uint64(sum[:])
+
+		queueIdx := int(hash % uint64(len(s.queues))) //nolint:gosec
+		if _, ok := seen[queueIdx]; ok {
+			continue
+		}
+
+		seen[queueIdx] = struct{}{}
+		result = append(result, queueIdx)
+	}
+
+	best := result[0]
+	for _, idx := range result[1:] {
+		if s.queues[idx].Len() < s.queues[best].Len() {
+			best = idx
+		}
+	}
+
+	return best
 }
 
 func (s *sfqScheduler[T]) Dequeue() (T, bool) {
@@ -73,6 +114,6 @@ func (s *sfqScheduler[T]) Perturb() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.pertubation++
+	s.perturbation++
 
 }
