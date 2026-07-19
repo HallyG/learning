@@ -67,7 +67,7 @@ func TestEncodeDecodeEntry(t *testing.T) {
 				SequenceNumber: 42,
 				Data:           []byte("hello world"),
 			},
-			expectedError:         wal.ErrCorruptRecord,
+			expectedError:         wal.ErrCorruptEntry,
 			expectedErrorContains: "unknown version 2",
 		},
 		"returns error for invalid data length": {
@@ -80,7 +80,7 @@ func TestEncodeDecodeEntry(t *testing.T) {
 				// overwrite data length in header
 				binary.BigEndian.PutUint32(buf.Bytes()[9:13], wal.MaxSize+1)
 			},
-			expectedError:         wal.ErrCorruptRecord,
+			expectedError:         wal.ErrCorruptEntry,
 			expectedErrorContains: "invalid length 104857601",
 		},
 	}

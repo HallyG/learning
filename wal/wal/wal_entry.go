@@ -16,7 +16,7 @@ const (
 
 var (
 	ErrChecksumMismatch = errors.New("checksum mismatch")
-	ErrCorruptRecord    = errors.New("corrupt wal record")
+	ErrCorruptEntry     = errors.New("corrupt wal entry")
 )
 
 type Entry struct {
@@ -32,89 +32,61 @@ func (e *Entry) Encode(w io.Writer) error {
 		return fmt.Errorf("invalid length %d", dataLen)
 	}
 
-	if e.Version == 0 {
-		e.Version = Version1
-	}
+	buf := make([]byte, headerSize+dataLen+4)
+	buf[0] = e.Version
+	binary.BigEndian.PutUint64(buf[1:9], e.SequenceNumber)
+	binary.BigEndian.PutUint32(buf[9:13], uint32(dataLen)) //nolint:gosec
+	copy(buf[13:13+dataLen], e.Data)
 
-	if err := binary.Write(w, binary.BigEndian, e.Version); err != nil {
-		return fmt.Errorf("writing version: %w", err)
-	}
+	checksum := crc32.ChecksumIEEE(buf[:headerSize+dataLen])
+	binary.BigEndian.PutUint32(buf[headerSize+dataLen:], checksum)
 
-	if err := binary.Write(w, binary.BigEndian, e.SequenceNumber); err != nil {
-		return fmt.Errorf("writing sequence number: %w", err)
+	if _, err := w.Write(buf); err != nil {
+		return fmt.Errorf("writing entry: %w", err)
 	}
-
-	if err := binary.Write(w, binary.BigEndian, uint32(dataLen)); err != nil { //nolint:gosec
-		return fmt.Errorf("writing data length: %w", err)
-	}
-
-	if _, err := w.Write(e.Data); err != nil {
-		return fmt.Errorf("writing data: %w", err)
-	}
-
-	checksum := calculateChecksum(e.Version, e.SequenceNumber, uint32(dataLen), e.Data)
-	if err := binary.Write(w, binary.BigEndian, checksum); err != nil {
-		return fmt.Errorf("writing checksum: %w", err)
-	}
-
-	e.Checksum = checksum
 
 	return nil
 }
 
 func (e *Entry) Decode(r io.Reader) error {
-	var version byte
-	if err := binary.Read(r, binary.BigEndian, &version); err != nil {
-		return fmt.Errorf("reading version: %w", err)
-	}
-	if version != 1 {
-		return fmt.Errorf("%w: unknown version %d", ErrCorruptRecord, version)
+	header := make([]byte, headerSize)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return fmt.Errorf("reading header: %w", err)
 	}
 
-	var seqNum uint64
-	if err := binary.Read(r, binary.BigEndian, &seqNum); err != nil {
-		return fmt.Errorf("reading sequence number: %w", err)
+	version := header[0]
+	if version != Version1 {
+		return fmt.Errorf("%w: unknown version %d", ErrCorruptEntry, version)
 	}
 
-	var dataLen uint32
-	if err := binary.Read(r, binary.BigEndian, &dataLen); err != nil {
-		return fmt.Errorf("reading data length: %w", err)
-	}
-
+	seqNum := binary.BigEndian.Uint64(header[1:9])
+	dataLen := binary.BigEndian.Uint32(header[9:13])
 	if dataLen > MaxSize {
-		return fmt.Errorf("%w: invalid length %d", ErrCorruptRecord, dataLen)
+		return fmt.Errorf("%w: invalid length %d", ErrCorruptEntry, dataLen)
 	}
 
-	data := make([]byte, dataLen)
-	if _, err := io.ReadFull(r, data); err != nil {
+	buf := make([]byte, headerSize+int(dataLen)+4)
+	copy(buf, header)
+
+	if _, err := io.ReadFull(r, buf[headerSize:headerSize+int(dataLen)]); err != nil {
 		return fmt.Errorf("reading data: %w", err)
 	}
 
-	var checksum uint32
-	if err := binary.Read(r, binary.BigEndian, &checksum); err != nil {
+	checksumBytes := buf[headerSize+int(dataLen):]
+	if _, err := io.ReadFull(r, checksumBytes); err != nil {
 		return fmt.Errorf("reading checksum: %w", err)
 	}
 
-	expectedChecksum := calculateChecksum(version, seqNum, dataLen, data)
-	if expectedChecksum != checksum {
+	checksum := binary.BigEndian.Uint32(checksumBytes)
+	expected := crc32.ChecksumIEEE(buf[:headerSize+int(dataLen)])
+	if expected != checksum {
 		return fmt.Errorf("%w at sequence %d", ErrChecksumMismatch, seqNum)
 	}
 
 	e.Version = version
 	e.SequenceNumber = seqNum
-	e.Data = data
+	e.Data = buf[headerSize : headerSize+int(dataLen)]
 	e.Checksum = checksum
 
 	return nil
-}
-
-func calculateChecksum(version byte, seq uint64, dataLen uint32, data []byte) uint32 {
-	buf := make([]byte, headerSize+len(data))
-
-	buf[0] = version
-	binary.BigEndian.PutUint64(buf[1:], seq)
-	binary.BigEndian.PutUint32(buf[9:], dataLen)
-	copy(buf[13:], data)
-
-	return crc32.ChecksumIEEE(buf)
 }
