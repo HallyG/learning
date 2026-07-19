@@ -15,15 +15,14 @@ const (
 )
 
 var (
-	ErrChecksumMismatch = errors.New("checksum mismatch")
-	ErrCorruptEntry     = errors.New("corrupt wal entry")
+	ErrChecksumMismatch = errors.New("entry checksum mismatch")
+	ErrCorruptEntry     = errors.New("corrupt entry")
 )
 
 type Entry struct {
 	Version        byte
 	SequenceNumber uint64
 	Data           []byte
-	Checksum       uint32
 }
 
 func (e *Entry) Encode(w io.Writer) error {
@@ -51,7 +50,11 @@ func (e *Entry) Encode(w io.Writer) error {
 func (e *Entry) Decode(r io.Reader) error {
 	header := make([]byte, headerSize)
 	if _, err := io.ReadFull(r, header); err != nil {
-		return fmt.Errorf("reading header: %w", err)
+		if errors.Is(err, io.EOF) {
+			return io.EOF
+		}
+
+		return fmt.Errorf("%w: reading header: %w", ErrCorruptEntry, err)
 	}
 
 	version := header[0]
@@ -69,12 +72,12 @@ func (e *Entry) Decode(r io.Reader) error {
 	copy(buf, header)
 
 	if _, err := io.ReadFull(r, buf[headerSize:headerSize+int(dataLen)]); err != nil {
-		return fmt.Errorf("reading data: %w", err)
+		return fmt.Errorf("%w: reading data: %w", ErrCorruptEntry, err)
 	}
 
 	checksumBytes := buf[headerSize+int(dataLen):]
 	if _, err := io.ReadFull(r, checksumBytes); err != nil {
-		return fmt.Errorf("reading checksum: %w", err)
+		return fmt.Errorf("%w reading checksum: %w", ErrCorruptEntry, err)
 	}
 
 	checksum := binary.BigEndian.Uint32(checksumBytes)
@@ -86,7 +89,6 @@ func (e *Entry) Decode(r io.Reader) error {
 	e.Version = version
 	e.SequenceNumber = seqNum
 	e.Data = buf[headerSize : headerSize+int(dataLen)]
-	e.Checksum = checksum
 
 	return nil
 }

@@ -127,11 +127,11 @@ func ReplayReader(r io.Reader, fn func(*Entry) error) error {
 				return nil
 			}
 
-			return fmt.Errorf("reading wal entry: %w", err)
+			return fmt.Errorf("decoding entry: %w", err)
 		}
 
 		if err := fn(&ent); err != nil {
-			return fmt.Errorf("processing latest wal entry: %w", err)
+			return fmt.Errorf("processing entry: %w", err)
 		}
 	}
 }
