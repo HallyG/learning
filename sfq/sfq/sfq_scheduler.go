@@ -18,10 +18,11 @@ func (r *Request) Key() string {
 }
 
 type sfqScheduler[T Keyer] struct {
-	queues []Queue[T]
-	cursor int
+	queues      []Queue[T]
+	cursor      int
+	pertubation int
 
-	mu sync.Mutex
+	mu sync.RWMutex
 }
 
 func NewSFQScheduler[T Keyer](queue ...Queue[T]) Scheduler[T] {
@@ -31,10 +32,11 @@ func NewSFQScheduler[T Keyer](queue ...Queue[T]) Scheduler[T] {
 }
 
 func (s *sfqScheduler[T]) Enqueue(item T) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	pertubation := s.pertubation
+	s.mu.RUnlock()
 
-	hash := sha256.Sum256([]byte(item.Key()))
+	hash := sha256.Sum256(append([]byte(item.Key()), byte(pertubation)))
 	hashNum := int(binary.BigEndian.Uint32(hash[:]))
 
 	queueIdx := hashNum % len(s.queues)
@@ -68,5 +70,9 @@ func (s *sfqScheduler[T]) Dequeue() (T, bool) {
 }
 
 func (s *sfqScheduler[T]) Perturb() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.pertubation++
 
 }
