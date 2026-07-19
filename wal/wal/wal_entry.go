@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	Version1   = 1
-	MaxSize    = 100 << 20
-	headerSize = 1 + 8 + 4
+	Version1   byte = 1
+	MaxSize         = 100 << 20
+	headerSize      = 1 + 8 + 4
 )
 
 var (
@@ -27,8 +27,9 @@ type Entry struct {
 }
 
 func (e *Entry) Encode(w io.Writer) error {
-	if len(e.Data) > MaxSize {
-		return fmt.Errorf("invalid length %d", len(e.Data))
+	dataLen := len(e.Data)
+	if dataLen > MaxSize {
+		return fmt.Errorf("invalid length %d", dataLen)
 	}
 
 	if e.Version == 0 {
@@ -43,7 +44,7 @@ func (e *Entry) Encode(w io.Writer) error {
 		return fmt.Errorf("writing sequence number: %w", err)
 	}
 
-	if err := binary.Write(w, binary.BigEndian, uint32(len(e.Data))); err != nil { //nolint:gosec
+	if err := binary.Write(w, binary.BigEndian, uint32(dataLen)); err != nil { //nolint:gosec
 		return fmt.Errorf("writing data length: %w", err)
 	}
 
@@ -51,7 +52,7 @@ func (e *Entry) Encode(w io.Writer) error {
 		return fmt.Errorf("writing data: %w", err)
 	}
 
-	checksum := calculateChecksum(e.Version, e.SequenceNumber, uint32(len(e.Data)), e.Data)
+	checksum := calculateChecksum(e.Version, e.SequenceNumber, uint32(dataLen), e.Data)
 	if err := binary.Write(w, binary.BigEndian, checksum); err != nil {
 		return fmt.Errorf("writing checksum: %w", err)
 	}
@@ -81,7 +82,7 @@ func (e *Entry) Decode(r io.Reader) error {
 	}
 
 	if dataLen > MaxSize {
-		return fmt.Errorf("%w: invalid length %d", ErrCorruptRecord, len(e.Data))
+		return fmt.Errorf("%w: invalid length %d", ErrCorruptRecord, dataLen)
 	}
 
 	data := make([]byte, dataLen)
@@ -112,7 +113,7 @@ func calculateChecksum(version byte, seq uint64, dataLen uint32, data []byte) ui
 
 	buf[0] = version
 	binary.BigEndian.PutUint64(buf[1:], seq)
-	binary.BigEndian.PutUint32(buf[9:], uint32(len(data)))
+	binary.BigEndian.PutUint32(buf[9:], dataLen)
 	copy(buf[13:], data)
 
 	return crc32.ChecksumIEEE(buf)

@@ -2,7 +2,7 @@ package wal_test
 
 import (
 	"bytes"
-	"fmt"
+	"encoding/binary"
 	"io"
 	"testing"
 
@@ -14,10 +14,11 @@ func TestEncodeDecodeEntry(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
-		input                *wal.Entry
-		expected             *wal.Entry
-		expectedError        error
-		modifyEncodedPayload func(buf *bytes.Buffer)
+		input                 *wal.Entry
+		expected              *wal.Entry
+		expectedError         error
+		expectedErrorContains string
+		modifyEncodedPayload  func(buf *bytes.Buffer)
 	}{
 		"happy path": {
 			input: &wal.Entry{
@@ -53,7 +54,6 @@ func TestEncodeDecodeEntry(t *testing.T) {
 				data := buf.Bytes()
 
 				if len(data) >= 5 {
-					fmt.Println("RUN")
 					data = data[:len(data)-5]
 					buf.Reset()
 					buf.Write(data)
@@ -67,7 +67,21 @@ func TestEncodeDecodeEntry(t *testing.T) {
 				SequenceNumber: 42,
 				Data:           []byte("hello world"),
 			},
-			expectedError: wal.ErrCorruptRecord,
+			expectedError:         wal.ErrCorruptRecord,
+			expectedErrorContains: "unknown version 2",
+		},
+		"returns error for invalid data length": {
+			input: &wal.Entry{
+				Version:        wal.Version1,
+				SequenceNumber: 42,
+				Data:           []byte("hello world22"),
+			},
+			modifyEncodedPayload: func(buf *bytes.Buffer) {
+				// overwrite data length in header
+				binary.BigEndian.PutUint32(buf.Bytes()[9:13], wal.MaxSize+1)
+			},
+			expectedError:         wal.ErrCorruptRecord,
+			expectedErrorContains: "invalid length 104857601",
 		},
 	}
 	for name, test := range tests {
@@ -87,6 +101,10 @@ func TestEncodeDecodeEntry(t *testing.T) {
 
 			if test.expectedError != nil {
 				require.ErrorIs(t, err, test.expectedError)
+
+				if test.expectedErrorContains != "" {
+					require.ErrorContains(t, err, test.expectedErrorContains)
+				}
 			} else {
 				require.NoError(t, err)
 
