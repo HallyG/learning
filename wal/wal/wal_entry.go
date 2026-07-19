@@ -19,13 +19,17 @@ type Entry struct {
 }
 
 func (e *Entry) Encode(w io.Writer) error {
-	buf := make([]byte, 9+len(e.Data)) // 1 version + 8 seqnum + data
+	if len(e.Data) > math.MaxUint32 {
+		return fmt.Errorf("data too large: %d bytes", len(e.Data))
+	}
 
+	// Build payload for checksum
+	buf := make([]byte, 13+len(e.Data)) // 1 version + 8 seqnum + 4 length + data
 	buf[0] = e.Version
 	binary.BigEndian.PutUint64(buf[1:], e.SequenceNumber)
-	copy(buf[9:], e.Data)
-
-	e.Checksum = crc32.ChecksumIEEE(buf)
+	binary.BigEndian.PutUint32(buf[9:], uint32(len(e.Data)))
+	copy(buf[13:], e.Data)
+	checksum := crc32.ChecksumIEEE(buf)
 
 	if err := binary.Write(w, binary.BigEndian, e.Version); err != nil {
 		return fmt.Errorf("version: %w", err)
@@ -35,9 +39,6 @@ func (e *Entry) Encode(w io.Writer) error {
 		return fmt.Errorf("sequence number: %w", err)
 	}
 
-	if len(e.Data) > math.MaxUint32 {
-		return fmt.Errorf("data too large: %d bytes", len(e.Data))
-	}
 	if err := binary.Write(w, binary.BigEndian, uint32(len(e.Data))); err != nil { //nolint:gosec
 		return fmt.Errorf("data length: %w", err)
 	}
@@ -46,9 +47,11 @@ func (e *Entry) Encode(w io.Writer) error {
 		return fmt.Errorf("data: %w", err)
 	}
 
-	if err := binary.Write(w, binary.BigEndian, e.Checksum); err != nil {
+	if err := binary.Write(w, binary.BigEndian, checksum); err != nil {
 		return fmt.Errorf("checksum: %w", err)
 	}
+
+	e.Checksum = checksum
 
 	return nil
 }
@@ -82,11 +85,13 @@ func (e *Entry) Decode(r io.Reader) error {
 		return fmt.Errorf("checksum: %w", err)
 	}
 
-	buf := make([]byte, 9+dataLen) // 1 version + 8 seqnum + data
+	// Build payload for checksum
+	buf := make([]byte, 13+dataLen) // 1 version + 8 seqnum + 4 length + data
 	buf[0] = version
 	binary.BigEndian.PutUint64(buf[1:], seqNum)
+	binary.BigEndian.PutUint32(buf[9:], dataLen)
+	copy(buf[13:], data)
 
-	copy(buf[9:], data)
 	expectedChecksum := crc32.ChecksumIEEE(buf)
 	if expectedChecksum != checksum {
 		return fmt.Errorf("%w at sequence %d", ErrChecksumMismatch, seqNum)
