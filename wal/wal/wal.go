@@ -93,10 +93,7 @@ func (w *simpleWAL) Log(data []byte) error {
 
 func (w *simpleWAL) Replay(fn func(*Entry) error) error {
 	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf(
-			"seeking wal: %w",
-			err,
-		)
+		return fmt.Errorf("seeking wal: %w", err)
 	}
 
 	return ReplayReader(w.file, fn)

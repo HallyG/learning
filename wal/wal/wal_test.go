@@ -18,16 +18,15 @@ func TestReplay(t *testing.T) {
 		expectedErr     error
 	}{
 		{
-			name: "empty WAL",
-			buildInput: func(t *testing.T) []byte {
-				return nil
-			},
+			name:            "empty WAL",
 			expectedEntries: nil,
 			expectedErr:     nil,
 		},
 		{
 			name: "single entry",
 			buildInput: func(t *testing.T) []byte {
+				t.Helper()
+
 				return buildWAL(
 					t,
 					wal.Entry{
@@ -48,6 +47,8 @@ func TestReplay(t *testing.T) {
 		{
 			name: "multiple entries",
 			buildInput: func(t *testing.T) []byte {
+				t.Helper()
+
 				return buildWAL(
 					t,
 					wal.Entry{
@@ -88,6 +89,8 @@ func TestReplay(t *testing.T) {
 		{
 			name: "returns error when corrupt checksum",
 			buildInput: func(t *testing.T) []byte {
+				t.Helper()
+
 				data := buildWAL(
 					t,
 					wal.Entry{
@@ -105,6 +108,8 @@ func TestReplay(t *testing.T) {
 		{
 			name: "returns error when truncated final record",
 			buildInput: func(t *testing.T) []byte {
+				t.Helper()
+
 				data := buildWAL(
 					t,
 					wal.Entry{
@@ -122,6 +127,8 @@ func TestReplay(t *testing.T) {
 		{
 			name: "return error when valid entries followed by corrupt entry",
 			buildInput: func(t *testing.T) []byte {
+				t.Helper()
+
 				data := buildWAL(
 					t,
 					wal.Entry{
@@ -164,9 +171,13 @@ func TestReplay(t *testing.T) {
 			t.Parallel()
 
 			var (
-				input  = test.buildInput(t)
 				output []wal.Entry
 			)
+
+			var input []byte = nil
+			if test.buildInput != nil {
+				input = test.buildInput(t)
+			}
 
 			err := wal.ReplayReader(
 				bytes.NewReader(input),
