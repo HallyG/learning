@@ -60,11 +60,11 @@ func (s *sfqScheduler[T]) bestQueue(key string, perturbation uint64) int {
 	var pBuf [8]byte
 	binary.BigEndian.PutUint64(pBuf[:], perturbation)
 
-	for i := 0; len(result) < int(s.subsets); i++ {
+	for i := uint64(0); len(result) < int(s.subsets); i++ {
 		buf := make([]byte, 0, len(key)+16)
 		buf = append(buf, key...)
 		buf = append(buf, pBuf[:]...)
-		buf = binary.BigEndian.AppendUint64(buf, uint64(i))
+		buf = binary.BigEndian.AppendUint64(buf, i)
 
 		sum := sha256.Sum256(buf)
 		hash := binary.BigEndian.Uint64(sum[:])
