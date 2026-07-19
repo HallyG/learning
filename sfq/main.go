@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/HallyG/learning/sfq/sfq"
 )
 
 type Options struct {
@@ -41,6 +43,28 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 
 		return fmt.Errorf("parsing flags: %w", err)
 	}
+
+	queue := sfq.NewSliceQueue[*sfq.Request](5)
+	queue2 := sfq.NewSliceQueue[*sfq.Request](5)
+
+	scheduler := sfq.NewSFQScheduler(queue, queue2)
+	scheduler.Perturb()
+
+	req1 := &sfq.Request{
+		ID: "abc",
+	}
+	scheduler.Enqueue(req1)
+
+	req2 := &sfq.Request{
+		ID: "def",
+	}
+	scheduler.Enqueue(req2)
+
+	fmt.Println(scheduler.Dequeue())
+	fmt.Println(scheduler.Dequeue())
+	fmt.Println(scheduler.Dequeue())
+	fmt.Println(scheduler.Dequeue())
+	fmt.Println(scheduler.Dequeue())
 
 	return nil
 }
