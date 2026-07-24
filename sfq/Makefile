@@ -1,3 +1,3 @@
-APP_NAME := wal
+APP_NAME := sfq
 
 include ../common.mk
