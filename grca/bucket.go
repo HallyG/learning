@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -24,11 +25,15 @@ func NewRateLimiter(rate float64, burst int64) *GRCARateLimiter {
 	}
 }
 
-func (r *GRCARateLimiter) Allow(id string) bool {
+func (r *GRCARateLimiter) Allow(id string) (allowed bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	now := time.Now()
+
+	defer func() {
+		fmt.Println(allowed, time.Since(now))
+	}()
 
 	tat, ok := r.bucket[id]
 	if !ok {
