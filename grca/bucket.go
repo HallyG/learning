@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -11,6 +10,7 @@ type GRCARateLimiter struct {
 
 	interval time.Duration
 	burst    int64
+	metrics  LimiterMetrics
 
 	bucket map[string]time.Time
 	now    func() time.Time
@@ -28,14 +28,16 @@ func NewRateLimiter(rate float64, burst int64) *GRCARateLimiter {
 func (r *GRCARateLimiter) Allow(id string) (allowed bool) {
 	start := r.now()
 
-	lockStart := r.now()
+	lockStart := time.Now()
 	r.mu.Lock()
-	lockDuration := time.Since(lockStart)
+	lockWait := time.Since(lockStart)
 
 	defer func() {
 		r.mu.Unlock()
 
-		fmt.Println(allowed, time.Since(start), lockDuration)
+		r.metrics.RecordDuration(time.Since(start))
+		r.metrics.RecordLockWait(lockWait)
+		r.metrics.RecordDecision(allowed)
 	}()
 
 	now := r.now()
