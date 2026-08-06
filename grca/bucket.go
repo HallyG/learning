@@ -26,15 +26,19 @@ func NewRateLimiter(rate float64, burst int64) *GRCARateLimiter {
 }
 
 func (r *GRCARateLimiter) Allow(id string) (allowed bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	start := r.now()
 
-	now := time.Now()
+	lockStart := r.now()
+	r.mu.Lock()
+	lockDuration := time.Since(lockStart)
 
 	defer func() {
-		fmt.Println(allowed, time.Since(now))
+		r.mu.Unlock()
+
+		fmt.Println(allowed, time.Since(start), lockDuration)
 	}()
 
+	now := r.now()
 	tat, ok := r.bucket[id]
 	if !ok {
 		r.bucket[id] = now.Add(r.interval)
