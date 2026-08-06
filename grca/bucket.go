@@ -1,10 +1,13 @@
 package main
 
 import (
+	"sync"
 	"time"
 )
 
 type GRCARateLimiter struct {
+	mu sync.Mutex
+
 	interval time.Duration
 	burst    int64
 
@@ -22,6 +25,9 @@ func NewRateLimiter(rate float64, burst int64) *GRCARateLimiter {
 }
 
 func (r *GRCARateLimiter) Allow(id string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	now := time.Now()
 
 	tat, ok := r.bucket[id]
