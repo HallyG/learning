@@ -6,7 +6,7 @@ import (
 )
 
 type GRCARateLimiter struct {
-	mu sync.Mutex
+	mu sync.Mutex // todo, could shared this as currently different IDs block each other
 
 	interval time.Duration
 	burst    int64
