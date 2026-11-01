@@ -52,7 +52,7 @@ jobs:
         working-directory: .
         run: go test -tags="fts5" ./${{ needs.prepare.outputs.folder-name }}/... -timeout 10s -race -coverprofile=coverage.txt -covermode=atomic
       - name: Upload test coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: coverage-${{ needs.prepare.outputs.folder-name }}-${{ github.run_number }}
           path: coverage.txt
